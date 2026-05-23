@@ -1,0 +1,8 @@
+{
+  "name": "verity-scripts",
+  "version": "1.0.0",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "@circle-fin/developer-controlled-wallets": "^10.3.1"
+  }
+}

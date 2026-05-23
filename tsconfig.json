@@ -13,7 +13,9 @@
   },
   "references": [
     { "path": "./packages/shared" },
-    { "path": "./packages/scanner" }
+    { "path": "./packages/scanner" },
+    { "path": "./packages/api" },
+    { "path": "./packages/agent" }
   ],
   "exclude": ["node_modules", "dist", "apps"]
 }

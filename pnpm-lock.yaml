@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@circle-fin/developer-controlled-wallets':
+        specifier: ^10.3.1
+        version: 10.3.1
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
@@ -39,6 +46,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      ethers:
+        specifier: ^6.16.0
+        version: 6.16.0
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -88,6 +98,9 @@ packages:
 
   '@adraffy/ens-normalize@1.10.1':
     resolution: {integrity: sha512-96Z2IP3mYmF1Xg2cDm8f1gWGf/HUVedQ3FMifV4kG/PQ4yEP51xDtRAEfhVNt5f/uzpNkZHwWQuUcu6D6K+Ekw==}
+
+  '@circle-fin/developer-controlled-wallets@10.3.1':
+    resolution: {integrity: sha512-ulYYS6qOcbNFnTlCMJRpWaNichbHdxnla43CGNffkftLBzmA5XqnpWHPtSdEKA32VkmDe7Kk9wPKjNt89GAKQQ==}
 
   '@noble/curves@1.2.0':
     resolution: {integrity: sha512-oYclrNgRaM9SsBUBVbb8M6DTV7ZHRTKugureoYEncY5c65HOmRzvSiTE3y5CYaPYJA/GVkrhXEoF0M3Ya9PMnw==}
@@ -485,6 +498,13 @@ packages:
 snapshots:
 
   '@adraffy/ens-normalize@1.10.1': {}
+
+  '@circle-fin/developer-controlled-wallets@10.3.1':
+    dependencies:
+      axios: 1.16.1
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   '@noble/curves@1.2.0':
     dependencies:
