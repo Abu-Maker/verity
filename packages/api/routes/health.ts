@@ -56,6 +56,9 @@ async function checkChain(chainId: ChainId): Promise<{
 
 router.get('/', async (_req: Request, res: Response) => {
   const start = Date.now()
+  console.log('[Health] ETH_RPC_URL value:', process.env.ETH_RPC_URL?.slice(0, 40))
+  console.log('[Health] BASE_RPC_URL value:', process.env.BASE_RPC_URL?.slice(0, 40))
+  console.log('[Health] ARBITRUM_RPC_URL value:', process.env.ARBITRUM_RPC_URL?.slice(0, 40))
 
   try {
     const [ethereum, base, arbitrum] = await Promise.all([
