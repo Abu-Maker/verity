@@ -52,6 +52,7 @@ async function checkChain(chainId: ChainId): Promise<{
 
 router.get('/', async (_req: Request, res: Response) => {
   const start = Date.now()
+  console.log('[Health] ETH_RPC_URL:', process.env.ETH_RPC_URL ? 'SET' : 'NOT SET')
 
   try {
     // Check all Tier 1 chains in parallel
