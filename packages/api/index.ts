@@ -3,7 +3,9 @@
 // ============================================================
 
 import * as dotenv from 'dotenv'
-dotenv.config()
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config()
+}
 
 import express      from 'express'
 import intelligence from './routes/intelligence'
