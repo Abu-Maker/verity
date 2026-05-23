@@ -30,10 +30,12 @@
     "apps"
   ],
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/node": "^25.9.1"
   },
   "dependencies": {
     "@circle-fin/developer-controlled-wallets": "^10.3.1",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2"
   }
 }

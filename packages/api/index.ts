@@ -8,6 +8,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 import express      from 'express'
+import cors         from 'cors'
 import intelligence from './routes/intelligence'
 import health       from './routes/health'
 import { requireApiKey } from './middleware/auth'
@@ -17,16 +18,25 @@ import { meterUsage }    from './middleware/meter'
 const app : express.Application = express()
 const PORT = parseInt(process.env.API_PORT ?? '3000')
 
-// ---- Global middleware -------------------------------------
+// ---- Global middleware ------------------------------------
+
+app.use(cors({
+  origin: [
+    'https://verity-dashboard-ten.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-api-key'],
+}))
 
 app.use(express.json())
 
-// ---- Public routes -----------------------------------------
+// ---- Public routes ----------------------------------------
 
 app.use('/health', health)
 
-// ---- Authenticated routes ----------------------------------
-// Order matters: auth → rate limit → meter → route handler
+// ---- Authenticated routes ---------------------------------
 
 app.use('/v1', requireApiKey)
 app.use('/v1', rateLimit)
@@ -34,7 +44,7 @@ app.use('/v1', meterUsage)
 
 app.use('/v1/intelligence', intelligence)
 
-// ---- 404 ---------------------------------------------------
+// ---- 404 --------------------------------------------------
 
 app.use((_req, res) => {
   res.status(404).json({
@@ -43,7 +53,7 @@ app.use((_req, res) => {
   })
 })
 
-// ---- Start -------------------------------------------------
+// ---- Start ------------------------------------------------
 
 app.listen(PORT, () => {
   console.log(`[Verity API] Running on port ${PORT}`)
