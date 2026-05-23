@@ -27,7 +27,7 @@ const API_KEYS: Record<string, ApiKey> = {
     ownerId     : 'owner-001',
     tier        : 'free',
     queriesUsed : 0,
-    queryLimit  : 1000,
+    queryLimit  : 50,
     chains      : [ChainId.ETHEREUM],
     createdAt   : Date.now(),
   },

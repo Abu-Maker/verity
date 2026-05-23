@@ -1,0 +1,14 @@
+{
+  "name": "@verity/agent",
+  "version": "1.0.0",
+  "main": "agent.ts",
+  "dependencies": {
+    "@verity/shared": "workspace:*",
+    "axios": "^1.16.1",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*"
+  }
+}
