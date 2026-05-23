@@ -1,0 +1,16 @@
+{
+  "name": "@verity/api",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@verity/shared": "workspace:*",
+    "express": "^5.2.1",
+    "dotenv": "^17.4.2",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/express": "*",
+    "typescript": "*"
+  }
+}
