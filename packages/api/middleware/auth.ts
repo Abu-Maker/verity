@@ -27,7 +27,7 @@ const API_KEYS: Record<string, ApiKey> = {
     ownerId     : 'owner-001',
     tier        : 'free',
     queriesUsed : 0,
-    queryLimit  : 50,
+    queryLimit  : 50,       // Free — $0 — resets every 30 days
     chains      : [ChainId.ETHEREUM],
     createdAt   : Date.now(),
   },
@@ -36,7 +36,7 @@ const API_KEYS: Record<string, ApiKey> = {
     ownerId     : 'owner-002',
     tier        : 'builder',
     queriesUsed : 0,
-    queryLimit  : 50000,
+    queryLimit  : 500,      // Builder — $35/mo — resets every 30 days
     chains      : [ChainId.ETHEREUM, ChainId.BASE, ChainId.ARBITRUM],
     createdAt   : Date.now(),
   },
@@ -45,7 +45,7 @@ const API_KEYS: Record<string, ApiKey> = {
     ownerId     : 'owner-003',
     tier        : 'pro',
     queriesUsed : 0,
-    queryLimit  : 500000,
+    queryLimit  : 1000,     // Pro — $75/mo — resets every 30 days
     chains      : [ChainId.ETHEREUM, ChainId.BASE, ChainId.ARBITRUM],
     createdAt   : Date.now(),
   },

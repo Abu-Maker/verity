@@ -1,0 +1,15 @@
+# ============================================================
+# Verity — API Server
+# ============================================================
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install"
+
+[deploy]
+startCommand = "npx ts-node packages/api/index.ts"
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[env]
+API_PORT = "3000"

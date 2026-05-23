@@ -1,0 +1,18 @@
+# ============================================================
+# Verity — Ethereum Scanner Worker
+# Deploy this as a separate Railway service
+# ============================================================
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install"
+
+[deploy]
+startCommand = "npx ts-node packages/scanner/worker.ts"
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[env]
+CHAIN_ID = "1"
+POLL_INTERVAL = "12000"
+BATCH_SIZE = "3"

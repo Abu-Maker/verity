@@ -1,0 +1,17 @@
+# ============================================================
+# Verity — Base Scanner Worker
+# ============================================================
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install"
+
+[deploy]
+startCommand = "npx ts-node packages/scanner/worker.ts"
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[env]
+CHAIN_ID = "8453"
+POLL_INTERVAL = "2000"
+BATCH_SIZE = "5"

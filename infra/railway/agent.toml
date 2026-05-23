@@ -1,0 +1,16 @@
+# ============================================================
+# Verity — Autonomous Agent
+# Runs on a 5 minute cycle
+# ============================================================
+
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install"
+
+[deploy]
+startCommand = "npx ts-node packages/agent/agent.ts"
+restartPolicyType = "always"
+restartPolicyMaxRetries = 10
+
+[env]
+AGENT_INTERVAL = "300000"
