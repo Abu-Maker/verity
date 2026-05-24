@@ -1,8 +1,6 @@
 // ============================================================
 // Verity — Circle Wallet Integration
 // Handles USDC payments from the agent's Circle wallet.
-// Migrated and generalised from ArcSense Lite's agentWallet.ts
-// and circlePayment.ts — Arc-specific code removed.
 // ============================================================
 
 import axios from 'axios'
@@ -26,13 +24,9 @@ const circleClient = axios.create({
 
 export async function getWalletBalance(): Promise<number> {
   try {
-    const res = await circleClient.get(`/wallets/${WALLET_ID}/balances`)
+    const res      = await circleClient.get(`/wallets/${WALLET_ID}/balances`)
     const balances = res.data?.data?.tokenBalances ?? []
-
-    const usdc = balances.find(
-      (b: any) => b.token?.symbol === 'USDC'
-    )
-
+    const usdc     = balances.find((b: any) => b.token?.symbol === 'USDC')
     return usdc ? parseFloat(usdc.amount) : 0
   } catch (err) {
     logger.error('Failed to fetch wallet balance', err)
@@ -48,23 +42,31 @@ export async function payForQuery(
   queryDescription : string
 ): Promise<{ success: boolean; txHash?: string }> {
   try {
-    logger.payment(`Paying ${amountUsdc} USDC for: ${queryDescription}`)
-
-    const res = await circleClient.post('/transactions/transfer', {
+    const requestBody = {
       idempotencyKey    : `verity-agent-${Date.now()}`,
       walletId          : WALLET_ID,
       tokenId           : process.env.CIRCLE_USDC_TOKEN_ID,
       destinationAddress: recipientAddress,
       amounts           : [amountUsdc.toFixed(6)],
-    })
+    }
 
+    logger.payment(`Paying ${amountUsdc} USDC for: ${queryDescription}`)
+    logger.payment(`Request body: ${JSON.stringify(requestBody)}`)
+
+    const res    = await circleClient.post('/transactions/transfer', requestBody)
     const txHash = res.data?.data?.txHash
 
     logger.payment(`Payment successful`, { txHash, amountUsdc, queryDescription })
 
     return { success: true, txHash }
   } catch (err: any) {
-    logger.error('Payment failed', err?.response?.data ?? err?.message)
+    const errData = err?.response?.data
+    const errMsg  = err?.message
+    logger.error('Payment failed', JSON.stringify(errData ?? errMsg ?? err))
+    logger.error('Payment status', String(err?.response?.status ?? 'unknown'))
+    logger.error('Circle API key set', String(!!CIRCLE_API_KEY))
+    logger.error('Wallet ID', WALLET_ID)
+    logger.error('Token ID', String(process.env.CIRCLE_USDC_TOKEN_ID))
     return { success: false }
   }
 }
@@ -74,12 +76,10 @@ export async function payForQuery(
 export async function hasSufficientBalance(
   requiredUsdc: number
 ): Promise<boolean> {
-  const balance = await getWalletBalance()
+  const balance    = await getWalletBalance()
   const sufficient = balance >= requiredUsdc
-
   if (!sufficient) {
     logger.warn(`Insufficient balance: ${balance} USDC available, ${requiredUsdc} USDC required`)
   }
-
   return sufficient
 }
