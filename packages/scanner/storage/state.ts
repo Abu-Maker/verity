@@ -2,7 +2,7 @@
 // Verity — Scanner State Storage
 // Tracks the last scanned block per chain so the worker
 // can resume after a restart without rescanning old blocks.
-// Phase 1: file-based. Phase 2: swap for Redis/Postgres.
+// Phase 1: file-based + API push. Phase 2: swap for Redis/Postgres.
 // ============================================================
 
 import * as fs   from 'fs'
@@ -11,9 +11,9 @@ import { ChainId, IntelligenceRecord } from '@verity/shared'
 
 // ---- Paths -------------------------------------------------
 
-const DATA_DIR   = path.resolve(process.cwd(), '.verity-data')
-const STATE_FILE = path.join(DATA_DIR, 'scanner-state.json')
-const RECORDS_DIR= path.join(DATA_DIR, 'records')
+const DATA_DIR    = path.resolve(process.cwd(), '.verity-data')
+const STATE_FILE  = path.join(DATA_DIR, 'scanner-state.json')
+const RECORDS_DIR = path.join(DATA_DIR, 'records')
 
 // ---- Bootstrap ---------------------------------------------
 
@@ -22,83 +22,87 @@ function ensureDirs() {
   if (!fs.existsSync(RECORDS_DIR)) fs.mkdirSync(RECORDS_DIR, { recursive: true })
 }
 
-// ---- State -------------------------------------------------
+// ---- Block state -------------------------------------------
 
-type ScannerState = Record<string, number>
-
-function readState(): ScannerState {
-  ensureDirs()
-  if (!fs.existsSync(STATE_FILE)) return {}
+export function getLastScannedBlock(chainId: ChainId): number | null {
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+    ensureDirs()
+    if (!fs.existsSync(STATE_FILE)) return null
+    const raw   = fs.readFileSync(STATE_FILE, 'utf-8')
+    const state = JSON.parse(raw)
+    return state[chainId] ?? null
   } catch {
-    return {}
+    return null
   }
 }
 
-function writeState(state: ScannerState): void {
-  ensureDirs()
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf-8')
-}
-
-export async function getLastScannedBlock(
-  chainId: ChainId
-): Promise<number | null> {
-  const state = readState()
-  return state[String(chainId)] ?? null
-}
-
-export async function setLastScannedBlock(
-  chainId    : ChainId,
-  blockNumber: number
-): Promise<void> {
-  const state = readState()
-  state[String(chainId)] = blockNumber
-  writeState(state)
-}
-
-// ---- Records -----------------------------------------------
-
-export async function saveRecords(
-  records: IntelligenceRecord[]
-): Promise<void> {
-  if (records.length === 0) return
-  ensureDirs()
-
-  const chainId  = records[0].chainId
-  const date     = new Date().toISOString().split('T')[0]
-  const filename = path.join(RECORDS_DIR, `${chainId}-${date}.jsonl`)
-
-  const lines = records
-    .map(r => JSON.stringify(r, bigIntReplacer))
-    .join('\n') + '\n'
-
-  fs.appendFileSync(filename, lines, 'utf-8')
-}
-
-export async function loadRecords(
-  chainId: ChainId,
-  date   : string
-): Promise<IntelligenceRecord[]> {
-  ensureDirs()
-  const filename = path.join(RECORDS_DIR, `${chainId}-${date}.jsonl`)
-  if (!fs.existsSync(filename)) return []
-
-  return fs.readFileSync(filename, 'utf-8')
-    .split('\n')
-    .filter(Boolean)
-    .map((line: string) => JSON.parse(line, bigIntReviver))
-}
-
-// ---- BigInt helpers ----------------------------------------
-
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() + 'n' : value
-}
-
-function bigIntReviver(_key: string, value: unknown): unknown {
-  if (typeof value === 'string' && /^\d+n$/.test(value)) {
-    return BigInt(value.slice(0, -1))
+export function saveLastScannedBlock(chainId: ChainId, blockNumber: number): void {
+  try {
+    ensureDirs()
+    let state: Record<string, number> = {}
+    if (fs.existsSync(STATE_FILE)) {
+      state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+    }
+    state[chainId] = blockNumber
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2))
+  } catch (err) {
+    console.error('[Verity State] Failed to save block state:', err)
   }
-  return value
+}
+
+// ---- Record storage ----------------------------------------
+
+export function saveRecords(chainId: ChainId, records: IntelligenceRecord[]): void {
+  try {
+    ensureDirs()
+    const today    = new Date().toISOString().split('T')[0]
+    const filePath = path.join(RECORDS_DIR, `${chainId}-${today}.json`)
+    let existing: IntelligenceRecord[] = []
+    if (fs.existsSync(filePath)) {
+      existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    }
+    existing.push(...records)
+    fs.writeFileSync(filePath, JSON.stringify(existing))
+    // Push to API after saving locally
+    pushToApi(chainId, records).catch(err =>
+      console.error('[Verity State] pushToApi error:', err)
+    )
+  } catch (err) {
+    console.error('[Verity State] Failed to save records:', err)
+  }
+}
+
+export function loadRecords(chainId: ChainId, date: string): IntelligenceRecord[] {
+  try {
+    ensureDirs()
+    const filePath = path.join(RECORDS_DIR, `${chainId}-${date}.json`)
+    if (!fs.existsSync(filePath)) return []
+    return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+  } catch {
+    return []
+  }
+}
+
+// ---- API push ----------------------------------------------
+
+export async function pushToApi(chainId: ChainId, records: IntelligenceRecord[]): Promise<void> {
+  const apiUrl = process.env.VERITY_API_URL
+  const secret = process.env.INGEST_SECRET ?? 'dev-ingest-secret'
+  if (!apiUrl) return // skip if not configured
+
+  try {
+    const res = await fetch(`${apiUrl}/v1/ingest`, {
+      method : 'POST',
+      headers: {
+        'Content-Type'     : 'application/json',
+        'x-ingest-secret'  : secret,
+      },
+      body: JSON.stringify({ chainId, records }),
+    })
+    if (!res.ok) {
+      console.error(`[Verity State] ingest push failed: ${res.status}`)
+    }
+  } catch (err) {
+    console.error('[Verity State] ingest push error:', err)
+  }
 }

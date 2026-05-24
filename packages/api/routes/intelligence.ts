@@ -7,7 +7,7 @@
 
 import express, { Router, Request, Response } from 'express'
 import { requireApiKey, incrementUsage } from '../middleware/auth'
-import { loadRecords } from '../../scanner/storage/state'
+import { getRecords, getAllRecords } from '../store/memory'
 import { IntelligenceQuerySchema } from '@verity/shared'
 import { ChainId, RiskLevel } from '@verity/shared'
 
@@ -47,11 +47,7 @@ router.get('/', requireApiKey, async (req: Request, res: Response) => {
       : apiKey.chains
 
     // Load records from all requested chains
-    let allRecords = (
-      await Promise.all(
-        chainsToQuery.map(chainId => loadRecords(chainId, today))
-      )
-    ).flat()
+    let allRecords = getAllRecords(chainsToQuery)
 
     // Apply filters
     if (query.status) {
@@ -122,11 +118,7 @@ router.get('/:txHash', requireApiKey, async (req: Request, res: Response) => {
     const today      = new Date().toISOString().split('T')[0]
 
     // Search across all chains the key has access to
-    const allRecords = (
-      await Promise.all(
-        apiKey.chains.map(chainId => loadRecords(chainId, today))
-      )
-    ).flat()
+    const allRecords = getAllRecords(apiKey.chains)
 
     const record = allRecords.find(r => r.txHash === txHash)
 
