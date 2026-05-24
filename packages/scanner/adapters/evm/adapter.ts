@@ -53,54 +53,65 @@ export class EVMAdapter {
 
     const records: IntelligenceRecord[] = []
 
-    for (const tx of block.prefetchedTransactions) {
-      try {
-        const receipt = await this.provider.getTransactionReceipt(tx.hash)
-        if (!receipt) continue
+    // Process transactions in batches to avoid rate limiting
+    const BATCH_SIZE = 10
+    const txs = block.prefetchedTransactions
 
-        const status        = this.classifyStatus(receipt.status)
-        const failureReason = status === TxStatus.FAILED
-          ? await this.detectFailureReason(tx.hash)
-          : null
-        const contractClass = this.classifyContract(tx.to)
-        const riskSignals   = this.generateRiskSignals(
-          status,
-          receipt.gasUsed,
-          tx.gasLimit,
-          failureReason
-        )
+    for (let i = 0; i < txs.length; i += BATCH_SIZE) {
+      const batch = txs.slice(i, i + BATCH_SIZE)
 
-        const record: IntelligenceRecord = {
-          id            : randomUUID(),
-          chainId       : this.config.chainId,
-          chainName     : this.config.name,
-          blockNumber   : block.number,
-          txHash        : tx.hash,
-          from          : tx.from,
-          to            : tx.to ?? null,
-          status,
-          failureReason,
-          contractClass,
-          riskSignals,
-          gasUsed       : receipt.gasUsed,
-          gasLimit      : tx.gasLimit,
-          timestamp     : block.timestamp * 1000,
-          processedAt   : Date.now(),
-        }
+      await Promise.all(batch.map(async (tx) => {
+        try {
+          const receipt = await this.provider.getTransactionReceipt(tx.hash)
+          if (!receipt) return
 
-        // Validate before accepting
-        const parsed = IntelligenceRecordSchema.safeParse(record)
-        if (parsed.success) {
-          records.push(record)
-        } else {
-          console.warn(
-            `[${this.config.name}] Invalid record for ${tx.hash}:`,
-            parsed.error.issues
+          const status        = this.classifyStatus(receipt.status)
+          const failureReason = status === TxStatus.FAILED
+            ? await this.detectFailureReason(tx.hash)
+            : null
+          const contractClass = this.classifyContract(tx.to)
+          const riskSignals   = this.generateRiskSignals(
+            status,
+            receipt.gasUsed,
+            tx.gasLimit,
+            failureReason
           )
+
+          const record: IntelligenceRecord = {
+            id            : randomUUID(),
+            chainId       : this.config.chainId,
+            chainName     : this.config.name,
+            blockNumber   : block.number,
+            txHash        : tx.hash,
+            from          : tx.from,
+            to            : tx.to ?? null,
+            status,
+            failureReason,
+            contractClass,
+            riskSignals,
+            gasUsed       : receipt.gasUsed,
+            gasLimit      : tx.gasLimit,
+            timestamp     : block.timestamp * 1000,
+            processedAt   : Date.now(),
+          }
+
+          const parsed = IntelligenceRecordSchema.safeParse(record)
+          if (parsed.success) {
+            records.push(record)
+          } else {
+            console.warn(
+              `[${this.config.name}] Invalid record for ${tx.hash}:`,
+              parsed.error.issues
+            )
+          }
+        } catch (err) {
+          console.error(`[${this.config.name}] Failed to process tx ${tx.hash}:`, err)
         }
-      } catch (err) {
-        console.error(`[${this.config.name}] Failed to process tx ${tx.hash}:`, err)
-        continue
+      }))
+
+      // Small delay between batches to respect rate limits
+      if (i + BATCH_SIZE < txs.length) {
+        await wait(100)
       }
     }
 
