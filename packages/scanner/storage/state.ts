@@ -22,6 +22,14 @@ function ensureDirs() {
   if (!fs.existsSync(RECORDS_DIR)) fs.mkdirSync(RECORDS_DIR, { recursive: true })
 }
 
+// ---- BigInt-safe serializer --------------------------------
+
+function safeStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, val) =>
+    typeof val === 'bigint' ? val.toString() : val
+  )
+}
+
 // ---- Block state -------------------------------------------
 
 export function getLastScannedBlock(chainId: ChainId): number | null {
@@ -62,7 +70,7 @@ export function saveRecords(chainId: ChainId, records: IntelligenceRecord[]): vo
       existing = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
     }
     existing.push(...records)
-    fs.writeFileSync(filePath, JSON.stringify(existing))
+    fs.writeFileSync(filePath, safeStringify(existing))
     // Push to API after saving locally
     pushToApi(chainId, records).catch(err =>
       console.error('[Verity State] pushToApi error:', err)
@@ -103,7 +111,7 @@ export async function pushToApi(chainId: ChainId, records: IntelligenceRecord[])
         'Content-Type'    : 'application/json',
         'x-ingest-secret' : secret,
       },
-      body: JSON.stringify({ chainId, records }),
+      body: safeStringify({ chainId, records }),
     })
     const text = await res.text()
     console.log(`[Verity State] ingest response: ${res.status} ${text}`)
