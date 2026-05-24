@@ -88,20 +88,25 @@ export function loadRecords(chainId: ChainId, date: string): IntelligenceRecord[
 export async function pushToApi(chainId: ChainId, records: IntelligenceRecord[]): Promise<void> {
   const apiUrl = process.env.VERITY_API_URL
   const secret = process.env.INGEST_SECRET ?? 'dev-ingest-secret'
-  if (!apiUrl) return // skip if not configured
+
+  console.log(`[Verity State] pushToApi called — apiUrl=${apiUrl} chainId=${chainId} records=${records.length}`)
+
+  if (!apiUrl) {
+    console.warn('[Verity State] VERITY_API_URL not set, skipping push')
+    return
+  }
 
   try {
     const res = await fetch(`${apiUrl}/v1/ingest`, {
       method : 'POST',
       headers: {
-        'Content-Type'     : 'application/json',
-        'x-ingest-secret'  : secret,
+        'Content-Type'    : 'application/json',
+        'x-ingest-secret' : secret,
       },
       body: JSON.stringify({ chainId, records }),
     })
-    if (!res.ok) {
-      console.error(`[Verity State] ingest push failed: ${res.status}`)
-    }
+    const text = await res.text()
+    console.log(`[Verity State] ingest response: ${res.status} ${text}`)
   } catch (err) {
     console.error('[Verity State] ingest push error:', err)
   }
