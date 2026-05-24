@@ -1,7 +1,7 @@
 // ============================================================
 // Verity — Dashboard Page
 // ============================================================
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApiKeyCard       from '../components/ApiKeyCard'
 import UsageBar         from '../components/UsageBar'
@@ -115,17 +115,23 @@ export default function Dashboard() {
     if (activeSection !== 'Agent') return
     const messages = [
       'Querying Ethereum for high risk signals...',
-      'Querying Base for high risk signals...',
-      'Querying Arbitrum for high risk signals...',
       'Decision: alert — 12 high risk transactions detected',
       'Paying 0.002 USDC for intelligence query...',
+      'Payment tx: 0x4f3a8b2c1d9e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b',
+      'Payment successful',
+      'Querying Base for high risk signals...',
+      'Decision: query — no high risk signals found',
+      'Querying Arbitrum for high risk signals...',
+      'Decision: alert — 3 high risk transactions detected',
+      'Paying 0.002 USDC for intelligence query...',
+      'Payment tx: 0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c',
       'Payment successful',
       'Agent tick complete. Next tick in 5 minutes.',
     ]
     let i = 0
     const t = setInterval(() => {
       if (i < messages.length) {
-        setAgentLog(prev => [...prev.slice(-20), messages[i]])
+        setAgentLog(prev => [...prev.slice(-30), messages[i]])
         i++
       } else {
         clearInterval(t)
@@ -157,6 +163,7 @@ export default function Dashboard() {
               <span style={styles.agentTitle}>AUTONOMOUS AGENT</span>
               <span style={styles.agentBadge}>● RUNNING</span>
             </div>
+
             <div style={styles.agentGrid}>
               <div style={styles.agentStat}>
                 <span style={styles.statLabel}>INTERVAL</span>
@@ -175,17 +182,47 @@ export default function Dashboard() {
                 <span style={styles.statValue}>Sepolia Testnet</span>
               </div>
             </div>
+
             <div style={styles.logBox}>
               <div style={styles.logHeader}>
                 <span style={styles.statLabel}>AGENT LOG</span>
+                <span style={{ ...styles.statLabel, color: '#2e4e2e' }}>
+                  tx hashes link to Sepolia Etherscan
+                </span>
               </div>
               <div style={styles.logBody}>
-                {agentLog.map((line, i) => (
-                  <div key={i} style={styles.logLine}>
-                    <span style={styles.logPrompt}>{'>'}</span>
-                    <span style={styles.logText}>{line}</span>
-                  </div>
-                ))}
+                {agentLog.map((line, i) => {
+                  const txMatch = line.match(/0x[a-fA-F0-9]{64}/)
+                  if (txMatch) {
+                    const tx   = txMatch[0]
+                    const url  = `https://sepolia.etherscan.io/tx/${tx}`
+                    const pre  = line.slice(0, line.indexOf(tx))
+                    const post = line.slice(line.indexOf(tx) + tx.length)
+                    return (
+                      <div key={i} style={styles.logLine}>
+                        <span style={styles.logPrompt}>{'>'}</span>
+                        <span style={styles.logText}>
+                          {pre}
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={styles.txLink}
+                          >
+                            {tx.slice(0, 10)}...{tx.slice(-6)} ↗
+                          </a>
+                          {post}
+                        </span>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={i} style={styles.logLine}>
+                      <span style={styles.logPrompt}>{'>'}</span>
+                      <span style={styles.logText}>{line}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -256,7 +293,7 @@ export default function Dashboard() {
   )
 }
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   root: {
     display      : 'flex',
     height       : '100vh',
@@ -392,6 +429,7 @@ const styles: Record<string, React.CSSProperties> = {
     display       : 'flex',
     flexDirection : 'column',
   },
+  // Agent panel
   agentPanel: {
     display       : 'flex',
     flexDirection : 'column',
@@ -455,8 +493,11 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight     : '300px',
   },
   logHeader: {
-    padding      : '12px 16px',
-    borderBottom : '1px solid #1e2e1e',
+    padding        : '12px 16px',
+    borderBottom   : '1px solid #1e2e1e',
+    display        : 'flex',
+    justifyContent : 'space-between',
+    alignItems     : 'center',
   },
   logBody: {
     padding       : '16px',
@@ -475,11 +516,19 @@ const styles: Record<string, React.CSSProperties> = {
     color     : '#a3e635',
     fontSize  : '12px',
     marginTop : '1px',
+    flexShrink: 0,
   },
   logText: {
     fontFamily : "'Space Mono', monospace",
     fontSize   : '12px',
     color      : '#7a8a7a',
     lineHeight : '1.6',
+  },
+  txLink: {
+    color          : '#a3e635',
+    textDecoration : 'underline',
+    fontFamily     : "'Space Mono', monospace",
+    fontSize       : '12px',
+    cursor         : 'pointer',
   },
 }
