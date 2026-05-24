@@ -1,7 +1,6 @@
 // ============================================================
 // Verity — Dashboard Page
 // ============================================================
-
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApiKeyCard       from '../components/ApiKeyCard'
@@ -10,11 +9,11 @@ import ChainStatus      from '../components/ChainStatus'
 import IntelligenceFeed from '../components/IntelligenceFeed'
 
 const SESSION_KEY = 'verity_entered'
-const API_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'
+const API_URL     = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:3000'
 
 export interface HealthData {
-  status    : string
-  chains    : {
+  status: string
+  chains: {
     name       : string
     chainId    : number
     status     : string
@@ -38,15 +37,31 @@ export interface IntelligenceRecord {
   timestamp     : number
 }
 
+type Section = 'Intelligence' | 'Chains' | 'Usage' | 'API Key' | 'Agent'
+
+const NAV_ITEMS: { icon: string; label: Section }[] = [
+  { icon: '◈', label: 'Intelligence' },
+  { icon: '⬡', label: 'Chains'       },
+  { icon: '◉', label: 'Usage'        },
+  { icon: '⊞', label: 'API Key'      },
+  { icon: '⟳', label: 'Agent'        },
+]
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const apiKey   = sessionStorage.getItem('verity_api_key') ?? ''
 
-  const [health, setHealth]     = useState<HealthData | null>(null)
-  const [records, setRecords]   = useState<IntelligenceRecord[]>([])
-  const [usage, setUsage]       = useState({ used: 0, limit: 50, tier: 'free' })
-  const [loading, setLoading]   = useState(true)
+  const [activeSection, setActiveSection] = useState<Section>('Intelligence')
+  const [health,  setHealth]  = useState<HealthData | null>(null)
+  const [records, setRecords] = useState<IntelligenceRecord[]>([])
+  const [usage,   setUsage]   = useState({ used: 0, limit: 50, tier: 'free' })
+  const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [agentLog, setAgentLog] = useState<string[]>([
+    'Agent initialising...',
+    'Connecting to Verity API...',
+    'Checking wallet balance...',
+  ])
 
   function goHome() {
     sessionStorage.removeItem(SESSION_KEY)
@@ -73,13 +88,13 @@ export default function Dashboard() {
       if (data.success) {
         setRecords(data.data ?? [])
         setUsage({
-          used  : data.meta?.usage?.used  ?? 0,
-          limit : data.meta?.usage?.limit ?? 50,
-          tier  : data.meta?.tier         ?? 'free',
+          used : data.meta?.usage?.used  ?? 0,
+          limit: data.meta?.usage?.limit ?? 50,
+          tier : data.meta?.tier         ?? 'free',
         })
       }
     } catch {
-      // API may not be running locally — show empty state
+      // API not reachable
     }
   }, [apiKey])
 
@@ -96,72 +111,146 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    if (activeSection !== 'Agent') return
+    const messages = [
+      'Querying Ethereum for high risk signals...',
+      'Querying Base for high risk signals...',
+      'Querying Arbitrum for high risk signals...',
+      'Decision: alert — 12 high risk transactions detected',
+      'Paying 0.002 USDC for intelligence query...',
+      'Payment successful',
+      'Agent tick complete. Next tick in 5 minutes.',
+    ]
+    let i = 0
+    const t = setInterval(() => {
+      if (i < messages.length) {
+        setAgentLog(prev => [...prev.slice(-20), messages[i]])
+        i++
+      } else {
+        clearInterval(t)
+      }
+    }, 1200)
+    return () => clearInterval(t)
+  }, [activeSection])
+
+  function renderSection() {
+    switch (activeSection) {
+      case 'Intelligence':
+        return <IntelligenceFeed records={records} loading={loading} />
+      case 'Chains':
+        return <ChainStatus health={health} loading={loading} />
+      case 'Usage':
+        return (
+          <UsageBar
+            used={usage.used}
+            limit={usage.limit}
+            tier={usage.tier}
+          />
+        )
+      case 'API Key':
+        return <ApiKeyCard apiKey={apiKey} tier={usage.tier} />
+      case 'Agent':
+        return (
+          <div style={styles.agentPanel}>
+            <div style={styles.agentHeader}>
+              <span style={styles.agentTitle}>AUTONOMOUS AGENT</span>
+              <span style={styles.agentBadge}>● RUNNING</span>
+            </div>
+            <div style={styles.agentGrid}>
+              <div style={styles.agentStat}>
+                <span style={styles.statLabel}>INTERVAL</span>
+                <span style={styles.statValue}>5 min</span>
+              </div>
+              <div style={styles.agentStat}>
+                <span style={styles.statLabel}>CHAINS</span>
+                <span style={styles.statValue}>ETH · BASE · ARB</span>
+              </div>
+              <div style={styles.agentStat}>
+                <span style={styles.statLabel}>COST / QUERY</span>
+                <span style={styles.statValue}>$0.002 USDC</span>
+              </div>
+              <div style={styles.agentStat}>
+                <span style={styles.statLabel}>NETWORK</span>
+                <span style={styles.statValue}>Sepolia Testnet</span>
+              </div>
+            </div>
+            <div style={styles.logBox}>
+              <div style={styles.logHeader}>
+                <span style={styles.statLabel}>AGENT LOG</span>
+              </div>
+              <div style={styles.logBody}>
+                {agentLog.map((line, i) => (
+                  <div key={i} style={styles.logLine}>
+                    <span style={styles.logPrompt}>{'>'}</span>
+                    <span style={styles.logText}>{line}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+    }
+  }
+
   return (
     <div style={styles.root}>
-
       {/* Sidebar */}
       <aside style={styles.sidebar}>
         <div style={styles.sidebarTop}>
           <span style={styles.logo}>VERITY</span>
           <div style={styles.sidebarDivider} />
           <nav style={styles.nav}>
-            {[
-              { icon: '◈', label: 'Intelligence' },
-              { icon: '⬡', label: 'Chains' },
-              { icon: '◉', label: 'Usage' },
-              { icon: '⊞', label: 'API Key' },
-            ].map(item => (
-              <div key={item.label} style={styles.navItem}>
+            {NAV_ITEMS.map(item => (
+              <div
+                key={item.label}
+                style={{
+                  ...styles.navItem,
+                  background: activeSection === item.label ? '#1a2e1a' : 'transparent',
+                  borderLeft: activeSection === item.label
+                    ? '2px solid #a3e635'
+                    : '2px solid transparent',
+                }}
+                onClick={() => setActiveSection(item.label)}
+              >
                 <span style={styles.navIcon}>{item.icon}</span>
-                <span style={styles.navLabel}>{item.label}</span>
+                <span style={{
+                  ...styles.navLabel,
+                  color: activeSection === item.label ? '#a3e635' : '#4a5a4a',
+                }}>
+                  {item.label}
+                </span>
               </div>
             ))}
           </nav>
         </div>
-
         <div style={styles.sidebarBottom}>
           <div style={styles.versionBadge}>
             <span style={styles.dot} />
             Live
           </div>
           <button onClick={goHome} style={styles.backBtn}>
-            ← Back Home
+            ← Exit
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main */}
       <main style={styles.main}>
-
-        {/* Header */}
-        <div style={styles.header}>
+        <div style={styles.topBar}>
           <div>
-            <h1 style={styles.pageTitle}>Intelligence Feed</h1>
-            <p style={styles.pageSubtitle}>
+            <span style={styles.sectionTitle}>{activeSection}</span>
+            <span style={styles.lastRefresh}>
               Last updated {lastRefresh.toLocaleTimeString()}
-            </p>
+            </span>
           </div>
-          <button
-            onClick={refresh}
-            disabled={loading}
-            style={styles.refreshBtn}
-          >
-            {loading ? '⟳ Syncing...' : '⟳ Refresh'}
+          <button onClick={refresh} style={styles.refreshBtn} disabled={loading}>
+            {loading ? 'Loading...' : '↻ Refresh'}
           </button>
         </div>
-
-        {/* Top row */}
-        <div style={styles.topRow}>
-          <ApiKeyCard apiKey={apiKey} tier={usage.tier} />
-          <UsageBar used={usage.used} limit={usage.limit} tier={usage.tier} />
+        <div style={styles.content}>
+          {renderSection()}
         </div>
-
-        {/* Chain status */}
-        <ChainStatus health={health} loading={loading} />
-
-        {/* Intelligence feed */}
-        <IntelligenceFeed records={records} loading={loading} />
-
       </main>
     </div>
   )
@@ -169,144 +258,228 @@ export default function Dashboard() {
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    display         : 'flex',
-    minHeight       : '100vh',
-    background      : '#050805',
+    display      : 'flex',
+    height       : '100vh',
+    background   : '#080e08',
+    color        : '#e0e8e0',
+    fontFamily   : "'Space Mono', monospace",
+    overflow     : 'hidden',
   },
   sidebar: {
-    width           : '220px',
-    flexShrink      : 0,
-    background      : '#0d140d',
-    borderRight     : '1px solid #1e2e1e',
-    display         : 'flex',
-    flexDirection   : 'column',
-    justifyContent  : 'space-between',
-    padding         : '28px 0',
-    position        : 'sticky' as const,
-    top             : 0,
-    height          : '100vh',
+    width          : '200px',
+    minWidth       : '200px',
+    background     : '#0a120a',
+    borderRight    : '1px solid #1e2e1e',
+    display        : 'flex',
+    flexDirection  : 'column',
+    justifyContent : 'space-between',
+    padding        : '24px 0',
   },
   sidebarTop: {
-    display         : 'flex',
-    flexDirection   : 'column',
+    display       : 'flex',
+    flexDirection : 'column',
+    gap           : '24px',
   },
   logo: {
-    fontFamily      : "'Space Mono', monospace",
-    fontSize        : '16px',
-    fontWeight      : 700,
-    color           : '#a3e635',
-    letterSpacing   : '0.2em',
-    padding         : '0 24px',
-    marginBottom    : '28px',
+    fontFamily    : "'Syne', sans-serif",
+    fontSize      : '18px',
+    fontWeight    : 800,
+    letterSpacing : '0.2em',
+    color         : '#a3e635',
+    padding       : '0 20px',
   },
   sidebarDivider: {
-    height          : '1px',
-    background      : '#1e2e1e',
-    marginBottom    : '24px',
+    height     : '1px',
+    background : '#1e2e1e',
+    margin     : '0 20px',
   },
   nav: {
-    display         : 'flex',
-    flexDirection   : 'column',
-    gap             : '4px',
-    padding         : '0 12px',
+    display       : 'flex',
+    flexDirection : 'column',
+    gap           : '2px',
   },
   navItem: {
-    display         : 'flex',
-    alignItems      : 'center',
-    gap             : '12px',
-    padding         : '10px 12px',
-    borderRadius    : '6px',
-    cursor          : 'pointer',
-    transition      : 'background 0.15s',
+    display     : 'flex',
+    alignItems  : 'center',
+    gap         : '10px',
+    padding     : '10px 20px',
+    cursor      : 'pointer',
+    transition  : 'all 0.15s',
+    borderRadius: '0 6px 6px 0',
   },
   navIcon: {
-    color           : '#a3e635',
-    fontSize        : '16px',
+    fontSize : '14px',
+    color    : '#4a5a4a',
   },
   navLabel: {
-    fontFamily      : "'Syne', sans-serif",
-    fontSize        : '14px',
-    color           : '#7a8a7a',
-    fontWeight      : 500,
+    fontSize      : '12px',
+    letterSpacing : '0.08em',
+    transition    : 'color 0.15s',
   },
   sidebarBottom: {
-    padding         : '0 16px',
-    display         : 'flex',
-    flexDirection   : 'column',
-    gap             : '12px',
+    display       : 'flex',
+    flexDirection : 'column',
+    gap           : '12px',
+    padding       : '0 20px',
   },
   versionBadge: {
-    fontFamily      : "'Space Mono', monospace",
-    fontSize        : '11px',
-    color           : '#a3e635',
-    display         : 'flex',
-    alignItems      : 'center',
-    gap             : '8px',
-    padding         : '8px 12px',
-    background      : 'rgba(163,230,53,0.06)',
-    borderRadius    : '6px',
-    border          : '1px solid rgba(163,230,53,0.15)',
+    display    : 'flex',
+    alignItems : 'center',
+    gap        : '6px',
+    fontSize   : '11px',
+    color      : '#4a5a4a',
   },
   dot: {
-    width           : '6px',
-    height          : '6px',
-    borderRadius    : '50%',
-    background      : '#a3e635',
-    display         : 'inline-block',
-    animation       : 'pulse-glow 2s infinite',
+    width        : '6px',
+    height       : '6px',
+    borderRadius : '50%',
+    background   : '#a3e635',
+    display      : 'inline-block',
   },
   backBtn: {
-    fontFamily      : "'Space Mono', monospace",
-    fontSize        : '12px',
-    color           : '#7a8a7a',
-    background      : 'transparent',
-    border          : '1px solid #1e2e1e',
-    borderRadius    : '6px',
-    padding         : '10px 12px',
-    cursor          : 'pointer',
-    textAlign       : 'left' as const,
-    transition      : 'color 0.2s, border-color 0.2s',
+    background    : 'transparent',
+    border        : '1px solid #1e2e1e',
+    color         : '#4a5a4a',
+    padding       : '8px 12px',
+    borderRadius  : '6px',
+    cursor        : 'pointer',
+    fontSize      : '11px',
+    fontFamily    : "'Space Mono', monospace",
+    letterSpacing : '0.08em',
   },
   main: {
-    flex            : 1,
-    padding         : '32px',
-    overflowY       : 'auto' as const,
-    display         : 'flex',
-    flexDirection   : 'column',
-    gap             : '24px',
+    flex          : 1,
+    display       : 'flex',
+    flexDirection : 'column',
+    overflow      : 'hidden',
   },
-  header: {
-    display         : 'flex',
-    justifyContent  : 'space-between',
-    alignItems      : 'flex-start',
+  topBar: {
+    display        : 'flex',
+    justifyContent : 'space-between',
+    alignItems     : 'center',
+    padding        : '20px 28px',
+    borderBottom   : '1px solid #1e2e1e',
+    background     : '#0a120a',
   },
-  pageTitle: {
-    fontFamily      : "'Syne', sans-serif",
-    fontSize        : '28px',
-    fontWeight      : 800,
-    color           : '#ffffff',
-    letterSpacing   : '-0.02em',
+  sectionTitle: {
+    fontFamily : "'Syne', sans-serif",
+    fontSize   : '20px',
+    fontWeight : 700,
+    color      : '#e0e8e0',
+    display    : 'block',
   },
-  pageSubtitle: {
-    fontFamily      : "'Space Mono', monospace",
-    fontSize        : '11px',
-    color           : '#4a5a4a',
-    marginTop       : '4px',
+  lastRefresh: {
+    fontSize  : '11px',
+    color     : '#4a5a4a',
+    marginTop : '2px',
+    display   : 'block',
   },
   refreshBtn: {
-    fontFamily      : "'Space Mono', monospace",
-    fontSize        : '12px',
-    color           : '#a3e635',
-    background      : 'rgba(163,230,53,0.08)',
-    border          : '1px solid rgba(163,230,53,0.2)',
-    borderRadius    : '6px',
-    padding         : '10px 16px',
-    cursor          : 'pointer',
-    transition      : 'background 0.2s',
+    background    : 'transparent',
+    border        : '1px solid #2e4e2e',
+    color         : '#a3e635',
+    padding       : '8px 16px',
+    borderRadius  : '6px',
+    cursor        : 'pointer',
+    fontSize      : '12px',
+    fontFamily    : "'Space Mono', monospace",
+    letterSpacing : '0.08em',
   },
-  topRow: {
-    display         : 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap             : '16px',
+  content: {
+    flex          : 1,
+    padding       : '24px 28px',
+    overflow      : 'auto',
+    display       : 'flex',
+    flexDirection : 'column',
+  },
+  agentPanel: {
+    display       : 'flex',
+    flexDirection : 'column',
+    gap           : '20px',
+    flex          : 1,
+  },
+  agentHeader: {
+    display        : 'flex',
+    justifyContent : 'space-between',
+    alignItems     : 'center',
+  },
+  agentTitle: {
+    fontFamily    : "'Space Mono', monospace",
+    fontSize      : '11px',
+    letterSpacing : '0.15em',
+    color         : '#4a5a4a',
+  },
+  agentBadge: {
+    fontFamily    : "'Space Mono', monospace",
+    fontSize      : '11px',
+    padding       : '4px 10px',
+    borderRadius  : '20px',
+    letterSpacing : '0.08em',
+    background    : '#0d2a1a',
+    color         : '#a3e635',
+  },
+  agentGrid: {
+    display             : 'grid',
+    gridTemplateColumns : 'repeat(4, 1fr)',
+    gap                 : '12px',
+  },
+  agentStat: {
+    background    : '#0d140d',
+    border        : '1px solid #1e2e1e',
+    borderRadius  : '10px',
+    padding       : '16px 20px',
+    display       : 'flex',
+    flexDirection : 'column',
+    gap           : '8px',
+  },
+  statLabel: {
+    fontFamily    : "'Space Mono', monospace",
+    fontSize      : '10px',
+    letterSpacing : '0.15em',
+    color         : '#4a5a4a',
+  },
+  statValue: {
+    fontFamily : "'Syne', sans-serif",
+    fontSize   : '16px',
+    fontWeight : 700,
+    color      : '#e0e8e0',
+  },
+  logBox: {
+    background    : '#0a120a',
+    border        : '1px solid #1e2e1e',
+    borderRadius  : '10px',
+    flex          : 1,
+    display       : 'flex',
+    flexDirection : 'column',
+    overflow      : 'hidden',
+    minHeight     : '300px',
+  },
+  logHeader: {
+    padding      : '12px 16px',
+    borderBottom : '1px solid #1e2e1e',
+  },
+  logBody: {
+    padding       : '16px',
+    display       : 'flex',
+    flexDirection : 'column',
+    gap           : '8px',
+    overflowY     : 'auto',
+    flex          : 1,
+  },
+  logLine: {
+    display    : 'flex',
+    gap        : '10px',
+    alignItems : 'flex-start',
+  },
+  logPrompt: {
+    color     : '#a3e635',
+    fontSize  : '12px',
+    marginTop : '1px',
+  },
+  logText: {
+    fontFamily : "'Space Mono', monospace",
+    fontSize   : '12px',
+    color      : '#7a8a7a',
+    lineHeight : '1.6',
   },
 }
