@@ -1,8 +1,5 @@
 // ============================================================
 // Verity — EVM Chain Adapter
-// One instance of this class = one chain.
-// Pass in a ChainConfig and it handles everything else.
-// Ethereum, Base, Arbitrum all use this same adapter.
 // ============================================================
 
 import { ethers } from 'ethers'
@@ -19,9 +16,42 @@ import {
 } from '@verity/shared'
 import { IntelligenceRecordSchema } from '@verity/shared'
 
-// ---- Wait helper -------------------------------------------
+// ---- Helpers -----------------------------------------------
 
 const wait = (ms: number) => new Promise(res => setTimeout(res, ms))
+
+function is429(err: any): boolean {
+  return (
+    err?.error?.code === 429 ||
+    err?.code === 429 ||
+    (err?.message ?? '').includes('429') ||
+    (err?.error?.message ?? '').includes('compute units')
+  )
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = 5
+): Promise<T | null> {
+  let delay = 1000
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err: any) {
+      if (is429(err) && attempt < maxRetries) {
+        await wait(delay)
+        delay = Math.min(delay * 2, 16000) // cap at 16s
+        continue
+      }
+      if (!is429(err)) {
+        console.error(`[retry:${label}] Non-429 error:`, err?.shortMessage ?? err?.message)
+      }
+      return null
+    }
+  }
+  return null
+}
 
 // ---- Adapter -----------------------------------------------
 
@@ -31,10 +61,10 @@ export class EVMAdapter {
 
   constructor(config: ChainConfig) {
     this.config   = config
-    this.provider = new ethers.JsonRpcProvider(config.rpcUrl)
+    this.provider = new ethers.JsonRpcProvider(config.rpcUrl, undefined, {
+      staticNetwork: true,
+    })
   }
-
-  // -- Connection check ---------------------------------------
 
   async isConnected(): Promise<boolean> {
     try {
@@ -45,86 +75,88 @@ export class EVMAdapter {
     }
   }
 
-  // -- Fetch a full block with receipts -----------------------
-
   async fetchBlock(blockNumber: number): Promise<IntelligenceRecord[]> {
-    const block = await this.provider.getBlock(blockNumber, true)
+    const block = await withRetry(
+      () => this.provider.getBlock(blockNumber, true),
+      `getBlock:${blockNumber}`
+    )
     if (!block || !block.transactions) return []
 
     const records: IntelligenceRecord[] = []
-
-    // Process transactions in batches to avoid rate limiting
-    const BATCH_SIZE = 10
+    const BATCH_SIZE = 5
     const txs = block.prefetchedTransactions
 
     for (let i = 0; i < txs.length; i += BATCH_SIZE) {
       const batch = txs.slice(i, i + BATCH_SIZE)
 
-      await Promise.all(batch.map(async (tx) => {
-        try {
-          const receipt = await this.provider.getTransactionReceipt(tx.hash)
-          if (!receipt) return
+      const results = await Promise.all(batch.map(async (tx) => {
+        const receipt = await withRetry(
+          () => this.provider.getTransactionReceipt(tx.hash),
+          `receipt:${tx.hash.slice(0, 10)}`
+        )
+        if (!receipt) return null
 
-          const status        = this.classifyStatus(receipt.status)
-          const failureReason = status === TxStatus.FAILED
-            ? await this.detectFailureReason(tx.hash)
-            : null
-          const contractClass = this.classifyContract(tx.to)
-          const riskSignals   = this.generateRiskSignals(
-            status,
-            receipt.gasUsed,
-            tx.gasLimit,
-            failureReason
-          )
+        const status        = this.classifyStatus(receipt.status)
+        const failureReason = status === TxStatus.FAILED
+          ? await this.detectFailureReason(tx.hash)
+          : null
+        const contractClass = this.classifyContract(tx.to)
+        const riskSignals   = this.generateRiskSignals(
+          status,
+          receipt.gasUsed,
+          tx.gasLimit,
+          failureReason
+        )
 
-          const record: IntelligenceRecord = {
-            id            : randomUUID(),
-            chainId       : this.config.chainId,
-            chainName     : this.config.name,
-            blockNumber   : block.number,
-            txHash        : tx.hash,
-            from          : tx.from,
-            to            : tx.to ?? null,
-            status,
-            failureReason,
-            contractClass,
-            riskSignals,
-            gasUsed       : receipt.gasUsed,
-            gasLimit      : tx.gasLimit,
-            timestamp     : block.timestamp * 1000,
-            processedAt   : Date.now(),
-          }
-
-          const parsed = IntelligenceRecordSchema.safeParse(record)
-          if (parsed.success) {
-            records.push(record)
-          } else {
-            console.warn(
-              `[${this.config.name}] Invalid record for ${tx.hash}:`,
-              parsed.error.issues
-            )
-          }
-        } catch (err) {
-          console.error(`[${this.config.name}] Failed to process tx ${tx.hash}:`, err)
+        const record: IntelligenceRecord = {
+          id            : randomUUID(),
+          chainId       : this.config.chainId,
+          chainName     : this.config.name,
+          blockNumber   : block.number,
+          txHash        : tx.hash,
+          from          : tx.from,
+          to            : tx.to ?? null,
+          status,
+          failureReason,
+          contractClass,
+          riskSignals,
+          gasUsed       : receipt.gasUsed,
+          gasLimit      : tx.gasLimit,
+          timestamp     : block.timestamp * 1000,
+          processedAt   : Date.now(),
         }
+
+        const parsed = IntelligenceRecordSchema.safeParse(record)
+        if (parsed.success) return record
+
+        console.warn(`[${this.config.name}] Invalid record for ${tx.hash}:`, parsed.error.issues)
+        return null
       }))
 
-      // Small delay between batches to respect rate limits
+      for (const r of results) {
+        if (r) records.push(r)
+      }
+
+      // Inter-batch delay — larger for fast chains to avoid 429 floods
       if (i + BATCH_SIZE < txs.length) {
-        await wait(100)
+        const delay = this.config.chainId === ChainId.ARBITRUM ? 300
+                    : this.config.chainId === ChainId.BASE      ? 200
+                    : 150
+        await wait(delay)
       }
     }
 
     return records
   }
 
-  // -- Get current block number --------------------------------
-
   async getLatestBlock(): Promise<number> {
-    return this.provider.getBlockNumber()
+    const result = await withRetry(
+      () => this.provider.getBlockNumber(),
+      'getLatestBlock'
+    )
+    if (result === null) throw new Error('Failed to get latest block after retries')
+    return result
   }
-
-  // -- Classify tx status from receipt ------------------------
 
   private classifyStatus(status: number | null): TxStatus {
     if (status === 1) return TxStatus.SUCCESS
@@ -132,20 +164,16 @@ export class EVMAdapter {
     return TxStatus.FAILED
   }
 
-  // -- Detect why a tx failed ---------------------------------
-
   private async detectFailureReason(txHash: string): Promise<string | null> {
     try {
       const tx = await this.provider.getTransaction(txHash)
       if (!tx) return null
-
       await this.provider.call({
         to    : tx.to ?? undefined,
         from  : tx.from,
         data  : tx.data,
         value : tx.value,
       })
-
       return null
     } catch (err: any) {
       const msg: string = err?.message ?? ''
@@ -160,21 +188,15 @@ export class EVMAdapter {
     }
   }
 
-  // -- Classify contract type from address --------------------
-
   private classifyContract(to: string | null): ContractClass {
     if (!to) return ContractClass.UNKNOWN
-
     const known: Record<string, ContractClass> = {
       '0x7a250d5630b4cf539739df2c5dacb4c659f2488d': ContractClass.DEX,
       '0xe592427a0aece92de3edee1f18e0157c05861564': ContractClass.DEX,
       '0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2': ContractClass.LENDING,
     }
-
     return known[to.toLowerCase()] ?? ContractClass.UNKNOWN
   }
-
-  // -- Generate risk signals ----------------------------------
 
   private generateRiskSignals(
     status       : TxStatus,
@@ -238,6 +260,5 @@ export function getChainConfig(chainId: ChainId): ChainConfig {
       blockTime: 250,
     },
   }
-
   return configs[chainId]
 }
