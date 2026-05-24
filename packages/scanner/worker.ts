@@ -10,7 +10,7 @@ dotenv.config()
 
 import { EVMAdapter, getChainConfig } from './adapters/evm/adapter'
 import { ChainId } from '@verity/shared'
-import { saveRecords, getLastScannedBlock, setLastScannedBlock } from './storage/state'
+import { saveRecords, getLastScannedBlock, saveLastScannedBlock } from './storage/state'
 
 // ---- Config ------------------------------------------------
 
@@ -67,7 +67,7 @@ async function run() {
         const records = await adapter.fetchBlock(blockNum)
 
         if (records.length > 0) {
-          await saveRecords(records)
+          await saveRecords(CHAIN_ID, records)
           console.log(`[${config.name}] Block ${blockNum} — ${records.length} records saved`)
 
           for (const record of records) {
@@ -85,7 +85,7 @@ async function run() {
           console.log(`[${config.name}] Block ${blockNum} — no records`)
         }
 
-        await setLastScannedBlock(config.chainId, blockNum)
+        await saveLastScannedBlock(config.chainId, blockNum)
         lastBlock = blockNum
       }
 
