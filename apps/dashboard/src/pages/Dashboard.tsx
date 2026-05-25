@@ -86,13 +86,15 @@ export default function Dashboard() {
       })
       const data = await res.json()
       if (data.success) {
-        setRecords(data.data ?? [])
-        setUsage({
-          used : data.meta?.usage?.used  ?? 0,
-          limit: data.meta?.usage?.limit ?? 50,
-          tier : data.meta?.tier         ?? 'free',
-        })
-      }
+  if ((data.data ?? []).length > 0) {
+    setRecords(data.data)
+  }
+  setUsage({
+    used : data.meta?.usage?.used  ?? 0,
+    limit: data.meta?.usage?.limit ?? 50,
+    tier : data.meta?.tier         ?? 'free',
+  })
+}
     } catch {
       // API not reachable
     }
