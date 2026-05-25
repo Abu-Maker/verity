@@ -5,10 +5,12 @@
   "dependencies": {
     "@verity/shared": "workspace:*",
     "axios": "^1.16.1",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/node": "*",
+    "@types/uuid": "^9.0.0",
     "typescript": "*"
   }
 }

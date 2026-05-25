@@ -1,16 +1,15 @@
 // ============================================================
 // Verity — Circle Wallet Integration
-// Handles USDC payments from the agent's Circle wallet.
 // ============================================================
 
-import axios from 'axios'
-import { logger } from './logger'
+import axios        from 'axios'
+import crypto, { randomUUID } from 'crypto'
+import { logger }   from './logger'
 
 const CIRCLE_API_URL = 'https://api.circle.com/v1/w3s'
-const CIRCLE_API_KEY = process.env.CIRCLE_API_KEY ?? ''
-const WALLET_ID      = process.env.CIRCLE_WALLET_ID ?? ''
-
-// ---- Circle API client ------------------------------------
+const CIRCLE_API_KEY = process.env.CIRCLE_API_KEY    ?? ''
+const WALLET_ID      = process.env.CIRCLE_WALLET_ID  ?? ''
+const ENTITY_SECRET  = process.env.CIRCLE_ENTITY_SECRET ?? ''
 
 const circleClient = axios.create({
   baseURL : CIRCLE_API_URL,
@@ -20,7 +19,21 @@ const circleClient = axios.create({
   },
 })
 
-// ---- Get wallet balance ------------------------------------
+async function getEntitySecretCiphertext(): Promise<string> {
+  const res       = await circleClient.get('/config/entity/publicKey')
+  const publicKey = res.data?.data?.publicKey as string
+
+  const encrypted = crypto.publicEncrypt(
+    {
+      key     : publicKey,
+      padding : crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha256',
+    },
+    Buffer.from(ENTITY_SECRET, 'hex')
+  )
+
+  return encrypted.toString('base64')
+}
 
 export async function getWalletBalance(): Promise<number> {
   try {
@@ -34,25 +47,26 @@ export async function getWalletBalance(): Promise<number> {
   }
 }
 
-// ---- Pay for a query ---------------------------------------
-
 export async function payForQuery(
   recipientAddress : string,
   amountUsdc       : number,
   queryDescription : string
 ): Promise<{ success: boolean; txHash?: string }> {
   try {
+    const entitySecretCiphertext = await getEntitySecretCiphertext()
+
     const requestBody = {
-      idempotencyKey    : `verity-agent-${Date.now()}`,
-      walletId          : WALLET_ID,
-      tokenId           : process.env.CIRCLE_USDC_TOKEN_ID,
-      destinationAddress: recipientAddress,
-      amounts           : [amountUsdc.toFixed(6)],
-      blockchain        : 'ETH-SEPOLIA',
+      idempotencyKey        : randomUUID(),
+      walletId              : WALLET_ID,
+      tokenId               : process.env.CIRCLE_USDC_TOKEN_ID,
+      destinationAddress    : recipientAddress,
+      amounts               : [amountUsdc.toFixed(6)],
+      blockchain            : 'ETH-SEPOLIA',
+      feeLevel              : 'MEDIUM',
+      entitySecretCiphertext,
     }
 
     logger.payment(`Paying ${amountUsdc} USDC for: ${queryDescription}`)
-    logger.payment(`Request body: ${JSON.stringify(requestBody)}`)
 
     const res    = await circleClient.post('/developer/transactions/transfer', requestBody)
     const txHash = res.data?.data?.txHash
@@ -63,12 +77,9 @@ export async function payForQuery(
   } catch (err: any) {
     const errData = err?.response?.data
     logger.error('Payment failed', JSON.stringify(errData ?? err?.message ?? err))
-    logger.error('Payment status', String(err?.response?.status ?? 'unknown'))
     return { success: false }
   }
 }
-
-// ---- Check if agent has enough balance ---------------------
 
 export async function hasSufficientBalance(
   requiredUsdc: number
