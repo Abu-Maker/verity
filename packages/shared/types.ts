@@ -7,15 +7,15 @@
 // ------ Supported Chains ------------------------------------
 
 export enum ChainId {
-  ETHEREUM  = 1,
-  BASE      = 8453,
-  ARBITRUM  = 42161,
+  ETHEREUM  = 11155111,  // Sepolia
+  BASE      = 84532,     // Base Sepolia
+  ARBITRUM  = 421614,    // Arbitrum Sepolia
 }
 
 export enum ChainName {
-  ETHEREUM  = 'ethereum',
-  BASE      = 'base',
-  ARBITRUM  = 'arbitrum',
+  ETHEREUM  = 'ethereum-sepolia',
+  BASE      = 'base-sepolia',
+  ARBITRUM  = 'arbitrum-sepolia',
 }
 
 export interface ChainConfig {
