@@ -11,6 +11,7 @@ import cors         from 'cors'
 import intelligence from './routes/intelligence'
 import health       from './routes/health'
 import ingest       from './routes/ingest'
+import agentRoute   from './routes/agent'
 import { requireApiKey } from './middleware/auth'
 import { rateLimit }     from './middleware/ratelimit'
 import { meterUsage }    from './middleware/meter'
@@ -18,7 +19,6 @@ import { meterUsage }    from './middleware/meter'
 const app : express.Application = express()
 const PORT = parseInt(process.env.API_PORT ?? '3000')
 
-// ---- Global middleware ------------------------------------
 app.use(cors({
   origin: [
     'https://verity-dashboard-ten.vercel.app',
@@ -33,8 +33,11 @@ app.use(express.json())
 // ---- Public routes ----------------------------------------
 app.use('/health', health)
 
-// ---- Scanner ingest (uses its own secret, not customer keys) ----
+// ---- Scanner ingest (own secret, not customer keys) -------
 app.use('/v1/ingest', ingest)
+
+// ---- Agent log route (public read) ------------------------
+app.use('/v1/agent', agentRoute)
 
 // ---- Authenticated routes ---------------------------------
 app.use('/v1', requireApiKey)

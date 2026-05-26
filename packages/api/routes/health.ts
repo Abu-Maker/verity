@@ -1,20 +1,15 @@
 // ============================================================
 // Verity — Health Route
 // GET /health
-// Shows live status of the API and all configured chains.
-// Useful for monitoring, Railway health checks, and customers
-// who want to verify the service is up before querying.
 // ============================================================
-
 import { Router, Request, Response } from 'express'
 import express from 'express'
 import { ethers } from 'ethers'
 import { ChainId, ChainName } from '@verity/shared'
 import { getChainConfig } from '../../scanner/adapters/evm/adapter'
+import { getStoreStats } from '../store/memory'
 
 const router: express.Router = Router()
-
-// ---- Chain health check ------------------------------------
 
 async function checkChain(chainId: ChainId): Promise<{
   name        : ChainName
@@ -25,16 +20,13 @@ async function checkChain(chainId: ChainId): Promise<{
 }> {
   const config = getChainConfig(chainId)
   const start  = Date.now()
-
   try {
     const network  = ethers.Network.from(chainId)
     const provider = new ethers.JsonRpcProvider(config.rpcUrl, network, {
       staticNetwork: network,
     })
-
     const blockNumber = await provider.getBlockNumber()
     const latencyMs   = Date.now() - start
-
     return {
       name       : config.name,
       chainId,
@@ -52,11 +44,8 @@ async function checkChain(chainId: ChainId): Promise<{
   }
 }
 
-// ---- GET /health -------------------------------------------
-
 router.get('/', async (_req: Request, res: Response) => {
   const start = Date.now()
-
   try {
     const [ethereum, base, arbitrum] = await Promise.all([
       checkChain(ChainId.ETHEREUM),
@@ -64,15 +53,10 @@ router.get('/', async (_req: Request, res: Response) => {
       checkChain(ChainId.ARBITRUM),
     ])
 
-    const chains   = [ethereum, base, arbitrum]
-    const healthy  = chains.every(c => c.status === 'healthy')
-    const degraded = chains.some(c => c.status === 'degraded')
-
-    const overallStatus = healthy
-      ? 'healthy'
-      : degraded
-        ? 'degraded'
-        : 'down'
+    const chains        = [ethereum, base, arbitrum]
+    const healthy       = chains.every(c => c.status === 'healthy')
+    const degraded      = chains.some(c => c.status === 'degraded')
+    const overallStatus = healthy ? 'healthy' : degraded ? 'degraded' : 'down'
 
     res.status(200).json({
       status    : overallStatus,
@@ -82,8 +66,8 @@ router.get('/', async (_req: Request, res: Response) => {
       uptimeMs  : process.uptime() * 1000,
       responseMs: Date.now() - start,
       chains,
+      store     : getStoreStats(),
     })
-
   } catch (err) {
     res.status(500).json({
       status   : 'down',
