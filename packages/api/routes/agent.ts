@@ -3,7 +3,7 @@
 // ============================================================
 import { Router, Request, Response } from 'express'
 
-const router = Router()
+const router: ReturnType<typeof Router> = Router()
 
 export interface AgentLogEntry {
   timestamp : number
