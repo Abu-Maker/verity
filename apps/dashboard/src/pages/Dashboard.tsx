@@ -1,7 +1,7 @@
 // ============================================================
 // Verity — Dashboard Page
 // ============================================================
-import { useState, useEffect, useCallback, CSSProperties } from 'react'
+import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApiKeyCard       from '../components/ApiKeyCard'
 import UsageBar         from '../components/UsageBar'
@@ -44,6 +44,13 @@ interface AgentLogEntry {
   data     ?: unknown
 }
 
+interface AgentStatus {
+  isRunning     : boolean
+  totalCycles   : number
+  totalUsdcSpent: number
+  logCount      : number
+}
+
 type Section = 'Intelligence' | 'Chains' | 'Usage' | 'API Key' | 'Agent'
 
 const NAV_ITEMS: { icon: string; label: Section }[] = [
@@ -63,16 +70,18 @@ const LEVEL_COLOR: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate()
-  const apiKey   = sessionStorage.getItem('verity_api_key') ?? ''
+  const navigate  = useNavigate()
+  const apiKey    = sessionStorage.getItem('verity_api_key') ?? ''
+  const logEndRef = useRef<HTMLDivElement>(null)
 
   const [activeSection, setActiveSection] = useState<Section>('Intelligence')
-  const [health,    setHealth]    = useState<HealthData | null>(null)
-  const [records,   setRecords]   = useState<IntelligenceRecord[]>([])
-  const [usage,     setUsage]     = useState({ used: 0, limit: 50, tier: 'free' })
-  const [loading,   setLoading]   = useState(true)
-  const [agentLog,  setAgentLog]  = useState<AgentLogEntry[]>([])
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [health,       setHealth]       = useState<HealthData | null>(null)
+  const [records,      setRecords]      = useState<IntelligenceRecord[]>([])
+  const [usage,        setUsage]        = useState({ used: 0, limit: 50, tier: 'free' })
+  const [loading,      setLoading]      = useState(true)
+  const [agentLog,     setAgentLog]     = useState<AgentLogEntry[]>([])
+  const [agentStatus,  setAgentStatus]  = useState<AgentStatus>({ isRunning: false, totalCycles: 0, totalUsdcSpent: 0, logCount: 0 })
+  const [lastRefresh,  setLastRefresh]  = useState<Date>(new Date())
 
   function goHome() {
     sessionStorage.removeItem(SESSION_KEY)
@@ -97,9 +106,7 @@ export default function Dashboard() {
       })
       const data = await res.json()
       if (data.success) {
-        if ((data.data ?? []).length > 0) {
-          setRecords(data.data)
-        }
+        if ((data.data ?? []).length > 0) setRecords(data.data)
         setUsage({
           used : data.meta?.usage?.used  ?? 0,
           limit: data.meta?.usage?.limit ?? 50,
@@ -111,9 +118,14 @@ export default function Dashboard() {
 
   const fetchAgentLogs = useCallback(async () => {
     try {
-      const res  = await fetch(`${API_URL}/v1/agent/logs`)
-      const data = await res.json()
-      if (data.success) setAgentLog(data.logs ?? [])
+      const [logsRes, statusRes] = await Promise.all([
+        fetch(`${API_URL}/v1/agent/logs`),
+        fetch(`${API_URL}/v1/agent/status`),
+      ])
+      const logsData   = await logsRes.json()
+      const statusData = await statusRes.json()
+      if (logsData.success)   setAgentLog(logsData.logs ?? [])
+      if (statusData.success) setAgentStatus(statusData)
     } catch {}
   }, [])
 
@@ -124,9 +136,16 @@ export default function Dashboard() {
     setLoading(false)
   }
 
+  // Auto-scroll agent log to bottom on new entries
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [agentLog])
+
   useEffect(() => {
     refresh()
-    const interval = setInterval(refresh, 30_000)
+    const interval = setInterval(refresh, 10_000) // 10s like ArcSense
     return () => clearInterval(interval)
   }, [])
 
@@ -146,7 +165,7 @@ export default function Dashboard() {
         </div>
       )
     }
-    return agentLog.map((entry, i) => {
+    return [...agentLog].reverse().map((entry, i) => {
       const line    = entry.message
       const color   = LEVEL_COLOR[entry.level] ?? '#7a8a7a'
       const txMatch = line.match(/0x[a-fA-F0-9]{64}/)
@@ -184,13 +203,7 @@ export default function Dashboard() {
       case 'Chains':
         return <ChainStatus health={health} loading={loading} />
       case 'Usage':
-        return (
-          <UsageBar
-            used={usage.used}
-            limit={usage.limit}
-            tier={usage.tier}
-          />
-        )
+        return <UsageBar used={usage.used} limit={usage.limit} tier={usage.tier} />
       case 'API Key':
         return <ApiKeyCard apiKey={apiKey} tier={usage.tier} />
       case 'Agent':
@@ -198,35 +211,44 @@ export default function Dashboard() {
           <div style={styles.agentPanel}>
             <div style={styles.agentHeader}>
               <span style={styles.agentTitle}>AUTONOMOUS AGENT</span>
-              <span style={styles.agentBadge}>{'● RUNNING'}</span>
+              <span style={styles.agentBadge}>
+                {agentStatus.isRunning ? '● RUNNING' : '○ IDLE'}
+              </span>
             </div>
+
             <div style={styles.agentGrid}>
               <div style={styles.agentStat}>
                 <span style={styles.statLabel}>INTERVAL</span>
                 <span style={styles.statValue}>5 min</span>
               </div>
               <div style={styles.agentStat}>
-                <span style={styles.statLabel}>CHAINS</span>
-                <span style={styles.statValue}>{'ETH · BASE · ARB'}</span>
+                <span style={styles.statLabel}>CYCLES RUN</span>
+                <span style={{ ...styles.statValue, color: agentStatus.totalCycles > 0 ? '#a3e635' : '#e0e8e0' }}>
+                  {agentStatus.totalCycles}
+                </span>
               </div>
               <div style={styles.agentStat}>
-                <span style={styles.statLabel}>COST / QUERY</span>
-                <span style={styles.statValue}>$0.002 USDC</span>
+                <span style={styles.statLabel}>USDC SPENT</span>
+                <span style={{ ...styles.statValue, color: agentStatus.totalUsdcSpent > 0 ? '#a3e635' : '#e0e8e0' }}>
+                  ${agentStatus.totalUsdcSpent.toFixed(4)}
+                </span>
               </div>
               <div style={styles.agentStat}>
                 <span style={styles.statLabel}>NETWORK</span>
-                <span style={styles.statValue}>Sepolia Testnet</span>
+                <span style={styles.statValue}>Sepolia</span>
               </div>
             </div>
+
             <div style={styles.logBox}>
               <div style={styles.logHeader}>
                 <span style={styles.statLabel}>AGENT LOG</span>
                 <span style={{ ...styles.statLabel, color: '#2e4e2e' }}>
-                  tx hashes link to Sepolia Etherscan
+                  tx hashes link to Sepolia Etherscan ↗
                 </span>
               </div>
               <div style={styles.logBody}>
                 {renderAgentLog()}
+                <div ref={logEndRef} />
               </div>
             </div>
           </div>
@@ -269,9 +291,7 @@ export default function Dashboard() {
             <span style={styles.dot} />
             Live
           </div>
-          <button onClick={goHome} style={styles.backBtn}>
-            {'← Exit'}
-          </button>
+          <button onClick={goHome} style={styles.backBtn}>{'← Exit'}</button>
         </div>
       </aside>
 

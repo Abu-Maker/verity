@@ -1,7 +1,6 @@
 // ============================================================
 // Verity — Intelligence Feed Component
 // ============================================================
-
 import { IntelligenceRecord } from '../pages/Dashboard'
 
 interface Props {
@@ -24,9 +23,30 @@ const RISK_COLORS: Record<string, string> = {
 }
 
 const CHAIN_NAMES: Record<number, string> = {
-  1    : 'Ethereum',
-  8453 : 'Base',
-  42161: 'Arbitrum',
+  1       : 'Ethereum',
+  8453    : 'Base',
+  42161   : 'Arbitrum',
+  11155111: 'Sepolia',
+  84532   : 'Base Sepolia',
+  421614  : 'Arb Sepolia',
+}
+
+const EXPLORER_TX: Record<number, string> = {
+  1       : 'https://etherscan.io/tx/',
+  8453    : 'https://basescan.org/tx/',
+  42161   : 'https://arbiscan.io/tx/',
+  11155111: 'https://sepolia.etherscan.io/tx/',
+  84532   : 'https://sepolia.basescan.org/tx/',
+  421614  : 'https://sepolia.arbiscan.io/tx/',
+}
+
+const EXPLORER_ADDR: Record<number, string> = {
+  1       : 'https://etherscan.io/address/',
+  8453    : 'https://basescan.org/address/',
+  42161   : 'https://arbiscan.io/address/',
+  11155111: 'https://sepolia.etherscan.io/address/',
+  84532   : 'https://sepolia.basescan.org/address/',
+  421614  : 'https://sepolia.arbiscan.io/address/',
 }
 
 function shortHash(hash: string) {
@@ -53,9 +73,7 @@ export default function IntelligenceFeed({ records, loading }: Props) {
     <div style={styles.card}>
       <div style={styles.header}>
         <span style={styles.label}>LIVE INTELLIGENCE FEED</span>
-        <span style={styles.count}>
-          {records.length} records
-        </span>
+        <span style={styles.count}>{records.length} records</span>
       </div>
 
       {loading && records.length === 0 ? (
@@ -66,60 +84,75 @@ export default function IntelligenceFeed({ records, loading }: Props) {
         </div>
       ) : records.length === 0 ? (
         <div style={styles.empty}>
-          <span style={styles.emptyIcon}>◈</span>
+          <span style={styles.emptyIcon}>{'◈'}</span>
           <p style={styles.emptyTitle}>No records yet</p>
-          <p style={styles.emptyHint}>
-            Start the scanner worker to begin ingesting blocks
-          </p>
+          <p style={styles.emptyHint}>Start the scanner worker to begin ingesting blocks</p>
         </div>
       ) : (
         <div style={styles.table}>
-          {/* Table header */}
           <div style={styles.tableHeader}>
             {['Chain', 'Tx Hash', 'From', 'Status', 'Risk', 'Class', 'Block', 'Time'].map(h => (
               <span key={h} style={styles.th}>{h}</span>
             ))}
           </div>
 
-          {/* Rows */}
           {records.map(record => {
-            const topRisk = record.riskSignals.sort((a, b) => {
+            const topRisk  = [...record.riskSignals].sort((a, b) => {
               const order = ['critical', 'high', 'medium', 'low']
               return order.indexOf(a.level) - order.indexOf(b.level)
             })[0]
+            const txBase   = EXPLORER_TX[record.chainId]
+            const addrBase = EXPLORER_ADDR[record.chainId]
 
             return (
               <div key={record.id} style={styles.row}>
+
                 <span style={styles.chain}>
                   {CHAIN_NAMES[record.chainId] ?? record.chainName}
                 </span>
-                <span style={styles.hash}>
-                  {shortHash(record.txHash)}
-                </span>
-                <span style={styles.addr}>
-                  {shortAddr(record.from)}
-                </span>
-                <span style={{
-                  ...styles.status,
-                  color: STATUS_COLORS[record.status] ?? '#7a8a7a',
-                }}>
+
+                {txBase ? (
+                  <a
+                    href={`${txBase}${record.txHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={styles.hashLink}
+                    title={record.txHash}
+                  >
+                    {shortHash(record.txHash)}{' ↗'}
+                  </a>
+                ) : (
+                  <span style={styles.hash}>{shortHash(record.txHash)}</span>
+                )}
+
+                {addrBase && record.from ? (
+                  <a
+                    href={`${addrBase}${record.from}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={styles.addrLink}
+                    title={record.from}
+                  >
+                    {shortAddr(record.from)}
+                  </a>
+                ) : (
+                  <span style={styles.addr}>{shortAddr(record.from)}</span>
+                )}
+
+                <span style={{ ...styles.status, color: STATUS_COLORS[record.status] ?? '#7a8a7a' }}>
                   {record.status}
                 </span>
-                <span style={{
-                  ...styles.risk,
-                  color: topRisk ? RISK_COLORS[topRisk.level] : '#4a5a4a',
-                }}>
+
+                <span style={{ ...styles.risk, color: topRisk ? RISK_COLORS[topRisk.level] : '#4a5a4a' }}>
                   {topRisk ? topRisk.level : '—'}
                 </span>
-                <span style={styles.cls}>
-                  {record.contractClass}
-                </span>
-                <span style={styles.block}>
-                  {record.blockNumber.toLocaleString()}
-                </span>
-                <span style={styles.time}>
-                  {timeAgo(record.timestamp)}
-                </span>
+
+                <span style={styles.cls}>{record.contractClass}</span>
+
+                <span style={styles.block}>{record.blockNumber.toLocaleString()}</span>
+
+                <span style={styles.time}>{timeAgo(record.timestamp)}</span>
+
               </div>
             )
           })}
@@ -160,9 +193,9 @@ const styles: Record<string, React.CSSProperties> = {
     color        : '#4a5a4a',
   },
   count: {
-    fontFamily   : "'Space Mono', monospace",
-    fontSize     : '11px',
-    color        : '#7a8a7a',
+    fontFamily: "'Space Mono', monospace",
+    fontSize  : '11px',
+    color     : '#7a8a7a',
   },
   table: {
     display      : 'flex',
@@ -171,7 +204,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tableHeader: {
     display            : 'grid',
-    gridTemplateColumns: '100px 90px 90px 80px 70px 90px 90px 70px',
+    gridTemplateColumns: '100px 100px 90px 80px 70px 90px 90px 70px',
     gap                : '8px',
     padding            : '8px 12px',
     borderBottom       : '1px solid #1e2e1e',
@@ -185,16 +218,30 @@ const styles: Record<string, React.CSSProperties> = {
   },
   row: {
     display            : 'grid',
-    gridTemplateColumns: '100px 90px 90px 80px 70px 90px 90px 70px',
+    gridTemplateColumns: '100px 100px 90px 80px 70px 90px 90px 70px',
     gap                : '8px',
     padding            : '10px 12px',
     borderRadius       : '6px',
     transition         : 'background 0.15s',
     cursor             : 'default',
   },
-  chain : { ...cell, color: '#a3e635' },
-  hash  : { ...cell, color: '#ffffff' },
-  addr  : { ...cell, color: '#7a8a7a' },
+  chain: { ...cell, color: '#a3e635' },
+  hash : { ...cell, color: '#ffffff' },
+  hashLink: {
+    ...cell,
+    color         : '#a3e635',
+    textDecoration: 'none',
+    borderBottom  : '1px dashed #3a5a3a',
+    cursor        : 'pointer',
+  },
+  addr: { ...cell, color: '#7a8a7a' },
+  addrLink: {
+    ...cell,
+    color         : '#7a8a7a',
+    textDecoration: 'none',
+    borderBottom  : '1px dashed #2a3a2a',
+    cursor        : 'pointer',
+  },
   status: { ...cell, fontWeight: 700 },
   risk  : { ...cell, fontWeight: 700, textTransform: 'capitalize' as const },
   cls   : { ...cell, color: '#7a8a7a', textTransform: 'capitalize' as const },
