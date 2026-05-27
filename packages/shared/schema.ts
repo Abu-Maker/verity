@@ -1,37 +1,25 @@
 // ============================================================
 // Verity — Runtime Schema Validation
-// Zod schemas that mirror types.ts and validate real data
-// coming off the chain before it enters the system.
 // ============================================================
 
 import { z } from 'zod'
 import {
-  ChainId,
-  ChainName,
-  TxStatus,
-  ContractClass,
-  RiskLevel,
+  ChainId, ChainName, TxStatus, ContractClass, RiskLevel, SignalType,
 } from './types'
 
-// ------ Enums -----------------------------------------------
-
-export const ChainIdSchema = z.nativeEnum(ChainId)
-export const ChainNameSchema = z.nativeEnum(ChainName)
-export const TxStatusSchema = z.nativeEnum(TxStatus)
-export const ContractClassSchema = z.nativeEnum(ContractClass)
-export const RiskLevelSchema = z.nativeEnum(RiskLevel)
-
-// ------ Risk Signal -----------------------------------------
+export const ChainIdSchema        = z.nativeEnum(ChainId)
+export const ChainNameSchema      = z.nativeEnum(ChainName)
+export const TxStatusSchema       = z.nativeEnum(TxStatus)
+export const ContractClassSchema  = z.nativeEnum(ContractClass)
+export const RiskLevelSchema      = z.nativeEnum(RiskLevel)
+export const SignalTypeSchema     = z.nativeEnum(SignalType)
 
 export const RiskSignalSchema = z.object({
   level      : RiskLevelSchema,
   reason     : z.string().min(1),
+  signalType : SignalTypeSchema,
   confidence : z.number().min(0).max(1),
 })
-
-// ------ Core Intelligence Record ----------------------------
-// Every chain adapter must produce data that passes this schema.
-// If it doesn't, it gets rejected before touching storage.
 
 export const IntelligenceRecordSchema = z.object({
   id            : z.string().uuid(),
@@ -47,11 +35,10 @@ export const IntelligenceRecordSchema = z.object({
   riskSignals   : z.array(RiskSignalSchema),
   gasUsed       : z.bigint(),
   gasLimit      : z.bigint(),
+  value         : z.bigint(),
   timestamp     : z.number().int().positive(),
   processedAt   : z.number().int().positive(),
 })
-
-// ------ API Key ---------------------------------------------
 
 export const ApiKeySchema = z.object({
   key         : z.string().min(32),
@@ -63,24 +50,18 @@ export const ApiKeySchema = z.object({
   createdAt   : z.number().int().positive(),
 })
 
-// ------ Query Params ----------------------------------------
-
 export const IntelligenceQuerySchema = z.object({
   chainId       : ChainIdSchema.optional(),
   status        : TxStatusSchema.optional(),
   contractClass : ContractClassSchema.optional(),
   riskLevel     : RiskLevelSchema.optional(),
+  signalType    : SignalTypeSchema.optional(),
   fromBlock     : z.number().int().positive().optional(),
   toBlock       : z.number().int().positive().optional(),
   limit         : z.number().int().min(1).max(500).default(50),
   offset        : z.number().int().min(0).default(0),
 })
 
-// ------ Inferred Types --------------------------------------
-// These let other files do:
-//   import type { IntelligenceRecordInput } from '../shared/schema'
-// and get full TypeScript inference from the Zod schema.
-
 export type IntelligenceRecordInput = z.infer<typeof IntelligenceRecordSchema>
-export type ApiKeyInput = z.infer<typeof ApiKeySchema>
-export type IntelligenceQueryInput = z.infer<typeof IntelligenceQuerySchema>
+export type ApiKeyInput             = z.infer<typeof ApiKeySchema>
+export type IntelligenceQueryInput  = z.infer<typeof IntelligenceQuerySchema>

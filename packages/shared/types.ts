@@ -1,31 +1,25 @@
 // ============================================================
 // Verity — Shared Types
-// Foundation for all packages. Every chain adapter, scanner,
-// API route, and agent imports from here.
 // ============================================================
 
-// ------ Supported Chains ------------------------------------
-
 export enum ChainId {
-  ETHEREUM  = 11155111,  // Sepolia
-  BASE      = 84532,     // Base Sepolia
-  ARBITRUM  = 421614,    // Arbitrum Sepolia
+  ETHEREUM = 11155111,
+  BASE     = 84532,
+  ARBITRUM = 421614,
 }
 
 export enum ChainName {
-  ETHEREUM  = 'ethereum-sepolia',
-  BASE      = 'base-sepolia',
-  ARBITRUM  = 'arbitrum-sepolia',
+  ETHEREUM = 'ethereum-sepolia',
+  BASE     = 'base-sepolia',
+  ARBITRUM = 'arbitrum-sepolia',
 }
 
 export interface ChainConfig {
   chainId   : ChainId
   name      : ChainName
   rpcUrl    : string
-  blockTime : number   // average ms between blocks
+  blockTime : number
 }
-
-// ------ Transaction Status ----------------------------------
 
 export enum TxStatus {
   SUCCESS  = 'success',
@@ -34,19 +28,16 @@ export enum TxStatus {
   PENDING  = 'pending',
 }
 
-// ------ Contract Classification -----------------------------
-
 export enum ContractClass {
-  DEX          = 'dex',
-  LENDING      = 'lending',
-  BRIDGE       = 'bridge',
-  NFT          = 'nft',
-  STABLECOIN   = 'stablecoin',
-  GOVERNANCE   = 'governance',
-  UNKNOWN      = 'unknown',
+  DEX        = 'dex',
+  LENDING    = 'lending',
+  BRIDGE     = 'bridge',
+  NFT        = 'nft',
+  STABLECOIN = 'stablecoin',
+  GOVERNANCE = 'governance',
+  MEV_BOT    = 'mev_bot',
+  UNKNOWN    = 'unknown',
 }
-
-// ------ Risk Signals ----------------------------------------
 
 export enum RiskLevel {
   LOW      = 'low',
@@ -55,35 +46,43 @@ export enum RiskLevel {
   CRITICAL = 'critical',
 }
 
-export interface RiskSignal {
-  level       : RiskLevel
-  reason      : string
-  confidence  : number   // 0-1
+// Signal types for exchange-grade classification
+export enum SignalType {
+  FAILED_TX        = 'failed_tx',
+  GAS_EXHAUSTION   = 'gas_exhaustion',
+  FLASH_LOAN       = 'flash_loan',
+  SANDWICH_ATTACK  = 'sandwich_attack',
+  WHALE_MOVEMENT   = 'whale_movement',
+  MEV_BOT          = 'mev_bot',
+  REVERT_STORM     = 'revert_storm',
+  LARGE_APPROVAL   = 'large_approval',
 }
 
-// ------ Core Intelligence Schema ----------------------------
-// This is the normalized output every chain adapter produces.
-// The API serves this shape. Customers never see chain-specific data.
+export interface RiskSignal {
+  level      : RiskLevel
+  reason     : string
+  signalType : SignalType
+  confidence : number
+}
 
 export interface IntelligenceRecord {
-  id              : string        // uuid
-  chainId         : ChainId
-  chainName       : ChainName
-  blockNumber     : number
-  txHash          : string
-  from            : string
-  to              : string | null
-  status          : TxStatus
-  failureReason   : string | null
-  contractClass   : ContractClass
-  riskSignals     : RiskSignal[]
-  gasUsed         : bigint
-  gasLimit        : bigint
-  timestamp       : number        // unix ms
-  processedAt     : number        // unix ms — when Verity classified it
+  id            : string
+  chainId       : ChainId
+  chainName     : ChainName
+  blockNumber   : number
+  txHash        : string
+  from          : string
+  to            : string | null
+  status        : TxStatus
+  failureReason : string | null
+  contractClass : ContractClass
+  riskSignals   : RiskSignal[]
+  gasUsed       : bigint
+  gasLimit      : bigint
+  value         : bigint
+  timestamp     : number
+  processedAt   : number
 }
-
-// ------ API -------------------------------------------------
 
 export interface ApiKey {
   key         : string
@@ -96,32 +95,29 @@ export interface ApiKey {
 }
 
 export interface UsageEvent {
-  apiKey      : string
-  endpoint    : string
-  chainId     : ChainId
-  timestamp   : number
-  responseMs  : number
+  apiKey     : string
+  endpoint   : string
+  chainId    : ChainId
+  timestamp  : number
+  responseMs : number
 }
-
-// ------ Agent -----------------------------------------------
 
 export interface AgentDecision {
-  triggeredAt   : number
-  chainId       : ChainId
-  action        : 'query' | 'alert' | 'skip'
-  reason        : string
-  usdcSpent     : number
+  triggeredAt : number
+  chainId     : ChainId
+  action      : 'query' | 'alert' | 'skip'
+  reason      : string
+  usdcSpent   : number
 }
 
-// ------ Query Params ----------------------------------------
-
 export interface IntelligenceQuery {
-  chainId         ?: ChainId
-  status          ?: TxStatus
-  contractClass   ?: ContractClass
-  riskLevel       ?: RiskLevel
-  fromBlock       ?: number
-  toBlock         ?: number
-  limit           ?: number   // default 50, max 500
-  offset          ?: number
+  chainId       ?: ChainId
+  status        ?: TxStatus
+  contractClass ?: ContractClass
+  riskLevel     ?: RiskLevel
+  signalType    ?: SignalType
+  fromBlock     ?: number
+  toBlock       ?: number
+  limit         ?: number
+  offset        ?: number
 }
